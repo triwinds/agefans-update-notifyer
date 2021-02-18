@@ -24,13 +24,16 @@ class AniInfo(BaseModel):
     detailUrl = CharField(null=True)
     premiereTime = DateField(null=True)
     updateTime = DateTimeField(null=True)
+    picUrl = CharField(null=True)
 
     def __repr__(self):
         # markdown 格式
         res = ''
         for item in self.__data__:
             if item == 'latestEpisode':
-                res += '**latestEpisode:**\n\n```json\n' + self.latestEpisode + '\n```'
+                res += '**latestEpisode:**\n\n```json\n' + self.latestEpisode + '\n```\n\n'
+            elif item == 'detailUrl':
+                res += '**detailUrl:** [%s](%s)\n\n' % (self.cnName, detailBaseUrl + self.aid)
             else:
                 res += '**%s:** %s\n\n' % (item, str(getattr(self, item)).replace('\n', '\n\n'))
         return res
@@ -53,7 +56,10 @@ def getInfoFromDetailJson(detail):
     aniInfo.updateTime = datetime.fromtimestamp(info['R更新时间unix'])
     aniInfo.latestEpisode = json.dumps(detail['AniPreRel'], ensure_ascii=False,
                                        indent=2, sort_keys=True)
-
+    if detail.get('AniPreRel'):
+        aniInfo.picUrl = '![](%s)' % detail['AniPreRel'][0]['PicSmall']
+    else:
+        aniInfo.picUrl = '![](%s)' % info['R封面图']
     return aniInfo
 
 
@@ -79,7 +85,21 @@ def sendToWechat(sckey, title, content):
     url = 'https://sc.ftqq.com/' + sckey + '.send'
     data = {'text': title, 'desp': content}
     result = requests.post(url, data)
-    return (result)
+    return result
+
+
+def sendBySct(sckey, title, content):
+    url = 'https://sctapi.ftqq.com/' + sckey + '.send'
+    data = {'text': title, 'desp': content}
+    result = requests.post(url, data)
+    return result
+
+
+def sendByTgBot(chatId, title, content):
+    # @shadowfox_MsgCat_bot
+    result = requests.post('https://msgcat.shadowfox.workers.dev/',
+                           json={'chatId': chatId, 'title': title, 'content': content})
+    return result
 
 
 def readConfig():
@@ -92,10 +112,15 @@ def main():
     for aid in config['aids']:
         print('checking aid:', aid)
         oldInfo = getAniInfoFromDb(aid)
+        if oldInfo and oldInfo.status != '连载':
+            print('%s 已经 %s 了, 跳过' % (oldInfo.cnName, oldInfo.status))
+            continue
         newInfo = getAniInfoFromApi(aid)
         if checkIfNeedToFireNotify(oldInfo, newInfo):
-            print(newInfo.cnName + ' 更新了')
-            sendToWechat(config['sckey'], newInfo.cnName + ' 更新了', str(newInfo))
+        # if True:
+            title = newInfo.cnName + ' 更新了'
+            print(title)
+            sendByTgBot(config['tg-chat-id'], title, str(newInfo))
             AniInfo.insert(newInfo.__data__).on_conflict_replace().execute()
 
 
