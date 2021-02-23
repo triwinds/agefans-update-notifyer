@@ -97,7 +97,7 @@ def sendBySct(sckey, title, content):
 
 def sendByTgBot(chatId, title, content):
     # @shadowfox_MsgCat_bot
-    result = requests.post('https://msgcat.shadowfox.workers.dev/',
+    result = requests.post('https://msgcat.shadowfox.workers.dev/sendMsg',
                            json={'chatId': chatId, 'title': title, 'content': content})
     return result
 
